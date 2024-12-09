@@ -11,12 +11,14 @@ class City {
 
 // TODO: Complete the HistoryService class
 class HistoryService {
-  private readonly filePath = './searchHistory.json'; // Path to the search history file
+  private readonly filePath = 'server/src/service/searchHistory.json'; // Path to the search history file
   // TODO: Define a read method that reads from the searchHistory.json file
   private async read(): Promise<City[]> {
     try {
-        // Read the file contents as a string
-        const data = await fs.readFile(this.filePath, 'utf8');
+        //Convert the array to a JSON string with formatting
+        const data = JSON.stringify(City, null, 2);
+          // Read the file contents as a string
+        await fs.readFile(this.filePath, 'utf8');
 
         // Parse the JSON and convert it into an array of City objects
         return JSON.parse(data) as City[];
@@ -30,7 +32,7 @@ class HistoryService {
     }
 }
   // TODO: Define a write method that writes the updated cities array to the searchHistory.json file
-  private async write(cities: City[]): Promise<void> {
+  private async write(cities: City[]): Promise<void> { 
     try {
         // Convert the cities array to a JSON string with formatting
         const data = JSON.stringify(cities, null, 2);
