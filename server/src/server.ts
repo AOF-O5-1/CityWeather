@@ -77,6 +77,7 @@ app.post('/api/weather', async (req, res) => {
     console.error('Error saving city:', error);
     res.status(500).json({ error: 'Failed to save city' });
   }
+  return res.status(200).json({ message: 'City added successfully' });
 });
 
 // Start the server
