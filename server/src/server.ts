@@ -60,7 +60,7 @@ app.use('/api', routes);
 app.use(express.static(clientDistPath));
 
 // Handle client-side routing - send all other requests to index.html
-app.get('*', (req, res) => {
+app.get('*', (_req, res) => {
   // Check if index.html exists before sending it
   const indexPath = path.join(clientDistPath, 'index.html');
   if (fs.existsSync(indexPath)) {
@@ -71,7 +71,16 @@ app.get('*', (req, res) => {
 });
 
 // Error handling middleware
-app.use((err, req, res, next) => {
+interface Error {
+  message: string;
+  stack?: string;
+}
+
+interface Request extends express.Request {}
+interface Response extends express.Response {}
+interface NextFunction extends express.NextFunction {}
+
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error('Server error:', err);
   res.status(500).json({
     error: 'Server error',
