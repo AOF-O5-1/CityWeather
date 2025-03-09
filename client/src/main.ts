@@ -28,6 +28,36 @@ const humidityEl: HTMLParagraphElement = document.getElementById(
   'humidity'
 ) as HTMLParagraphElement;
 
+// Define interfaces for type safety
+interface CurrentWeather {
+  city: string;
+  date: string;
+  icon: string;
+  iconDescription: string;
+  tempF: number;
+  windSpeed: number;
+  humidity: number;
+}
+
+interface ForecastDay {
+  date: string;
+  icon: string;
+  iconDescription: string;
+  tempF: number;
+  windSpeed: number;
+  humidity: number;
+}
+
+interface WeatherData {
+  currentWeather: CurrentWeather;
+  forecast: ForecastDay[];
+}
+
+interface CityHistory {
+  id: string;
+  name: string;
+}
+
 /*
 
 API Calls
@@ -35,39 +65,81 @@ API Calls
 */
 
 const fetchWeather = async (cityName: string) => {
-  const response = await fetch('/api/weather/', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ cityName }),
-  });
+  try {
+    console.log('cityName: ', cityName);
+    const response = await fetch('/api/weather', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ cityName }),
+    });
 
-  const weatherData = await response.json();
+    if (!response.ok) {
+      console.error('API Error:', response.status);
+      throw new Error(`Weather API responded with status: ${response.status}`);
+    }
 
-  console.log('weatherData: ', weatherData);
+    const weatherData = await response.json();
+    console.log('Response status:', response.status);
+    console.log('Full weather data:', weatherData);
 
-  renderCurrentWeather(weatherData.currentWeather);
-  renderForecast(weatherData.forecast);
+    // Check if the response has the expected structure
+    if (!weatherData || !weatherData.currentWeather) {
+      console.error('Invalid weather data format:', weatherData);
+      throw new Error('Weather data not in expected format');
+    }
+
+    renderCurrentWeather(weatherData.currentWeather);
+    renderForecast(weatherData.forecast || []);
+    return weatherData;
+  } catch (error) {
+    console.error('Error fetching weather:', error);
+    handleWeatherError();
+    return null;
+  }
 };
 
 const fetchSearchHistory = async () => {
-  const history = await fetch('/api/weather/history', {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
-  return history;
+  try {
+    const response = await fetch('/api/weather/history', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`History API responded with status: ${response.status}`);
+    }
+    
+    console.log('history response: ', response);
+    return response;
+    
+  } catch (error: any) {
+    console.log("Error fetching history: ", error);
+    return error.message;
+  }
 };
 
 const deleteCityFromHistory = async (id: string) => {
-  await fetch(`/api/weather/history/${id}`, {
-    method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+  try {
+    const response = await fetch(`/api/weather/history/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Delete API responded with status: ${response.status}`);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error deleting city:', error);
+    return false;
+  }
 };
 
 /*
@@ -76,11 +148,26 @@ Render Functions
 
 */
 
-const renderCurrentWeather = (currentWeather: any): void => {
-  const { city, date, icon, iconDescription, tempF, windSpeed, humidity } =
-    currentWeather;
+const renderCurrentWeather = (currentWeather: CurrentWeather | null): void => {
+  // Add a check to ensure currentWeather is defined
+  if (!currentWeather) {
+    console.error('Current weather data is undefined');
+    heading.textContent = 'Weather data not available';
+    weatherIcon.setAttribute('src', '');
+    weatherIcon.setAttribute('alt', '');
+    tempEl.textContent = '';
+    windEl.textContent = '';
+    humidityEl.textContent = '';
+    
+    if (todayContainer) {
+      todayContainer.innerHTML = '';
+      todayContainer.append(heading, tempEl, windEl, humidityEl);
+    }
+    return;
+  }
 
-  // convert the following to typescript
+  const { city, date, icon, iconDescription, tempF, windSpeed, humidity } = currentWeather;
+
   heading.textContent = `${city} (${date})`;
   weatherIcon.setAttribute(
     'src',
@@ -88,18 +175,29 @@ const renderCurrentWeather = (currentWeather: any): void => {
   );
   weatherIcon.setAttribute('alt', iconDescription);
   weatherIcon.setAttribute('class', 'weather-img');
-  heading.append(weatherIcon);
+  
+  // Create a new heading element to avoid appending the icon multiple times
+  const headingClone = heading.cloneNode(true) as HTMLHeadingElement;
+  headingClone.append(weatherIcon);
+  
   tempEl.textContent = `Temp: ${tempF}°F`;
   windEl.textContent = `Wind: ${windSpeed} MPH`;
   humidityEl.textContent = `Humidity: ${humidity} %`;
 
   if (todayContainer) {
     todayContainer.innerHTML = '';
-    todayContainer.append(heading, tempEl, windEl, humidityEl);
+    todayContainer.append(headingClone, tempEl, windEl, humidityEl);
   }
 };
 
-const renderForecast = (forecast: any): void => {
+const renderForecast = (forecast: ForecastDay[]): void => {
+  if (!forecast || !forecast.length) {
+    if (forecastContainer) {
+      forecastContainer.innerHTML = '<div class="col-12"><h4>No forecast data available</h4></div>';
+    }
+    return;
+  }
+
   const headingCol = document.createElement('div');
   const heading = document.createElement('h4');
 
@@ -117,7 +215,9 @@ const renderForecast = (forecast: any): void => {
   }
 };
 
-const renderForecastCard = (forecast: any) => {
+const renderForecastCard = (forecast: ForecastDay) => {
+  if (!forecast) return;
+  
   const { date, icon, iconDescription, tempF, windSpeed, humidity } = forecast;
 
   const { col, cardTitle, weatherIcon, tempEl, windEl, humidityEl } =
@@ -139,21 +239,36 @@ const renderForecastCard = (forecast: any) => {
   }
 };
 
-const renderSearchHistory = async (searchHistory: any) => {
-  const historyList = await searchHistory.json();
-
-  if (searchHistoryContainer) {
-    searchHistoryContainer.innerHTML = '';
-
-    if (!historyList.length) {
-      searchHistoryContainer.innerHTML =
-        '<p class="text-center">No Previous Search History</p>';
+const renderSearchHistory = async (searchHistory: Response | string) => {
+  if (typeof searchHistory === 'string') {
+    if (searchHistoryContainer) {
+      searchHistoryContainer.innerHTML = `<p class="text-center">Error: ${searchHistory}</p>`;
     }
+    return;
+  }
 
-    // * Start at end of history array and count down to show the most recent cities at the top.
-    for (let i = historyList.length - 1; i >= 0; i--) {
-      const historyItem = buildHistoryListItem(historyList[i]);
-      searchHistoryContainer.append(historyItem);
+  try {
+    const historyList = await searchHistory.json();
+
+    if (searchHistoryContainer) {
+      searchHistoryContainer.innerHTML = '';
+
+      if (!historyList || !historyList.length) {
+        searchHistoryContainer.innerHTML =
+          '<p class="text-center">No Previous Search History</p>';
+        return;
+      }
+
+      // * Start at end of history array and count down to show the most recent cities at the top.
+      for (let i = historyList.length - 1; i >= 0; i--) {
+        const historyItem = buildHistoryListItem(historyList[i]);
+        searchHistoryContainer.append(historyItem);
+      }
+    }
+  } catch (error) {
+    console.error('Error rendering search history:', error);
+    if (searchHistoryContainer) {
+      searchHistoryContainer.innerHTML = '<p class="text-center">Error loading search history</p>';
     }
   }
 };
@@ -234,7 +349,12 @@ const createHistoryDiv = () => {
   return div;
 };
 
-const buildHistoryListItem = (city: any) => {
+const buildHistoryListItem = (city: CityHistory) => {
+  if (!city || !city.name) {
+    console.error('Invalid city object:', city);
+    return document.createElement('div'); // Return empty div
+  }
+
   const newBtn = createHistoryButton(city.name);
   const deleteBtn = createDeleteButton();
   deleteBtn.dataset.city = JSON.stringify(city);
@@ -243,37 +363,79 @@ const buildHistoryListItem = (city: any) => {
   return historyDiv;
 };
 
+const handleWeatherError = () => {
+  heading.textContent = 'Error fetching weather data';
+  tempEl.textContent = '';
+  windEl.textContent = '';
+  humidityEl.textContent = '';
+  
+  if (todayContainer) {
+    todayContainer.innerHTML = '';
+    todayContainer.append(heading, tempEl, windEl, humidityEl);
+  }
+  
+  if (forecastContainer) {
+    forecastContainer.innerHTML = '<div class="col-12"><h4>No forecast data available</h4></div>';
+  }
+};
+
 /*
 
 Event Handlers
 
 */
 
-const handleSearchFormSubmit = (event: any): void => {
+const handleSearchFormSubmit = (event: Event): void => {
   event.preventDefault();
 
   if (!searchInput.value) {
-    throw new Error('City cannot be blank');
+    alert('City cannot be blank');
+    return;
   }
 
   const search: string = searchInput.value.trim();
-  fetchWeather(search).then(() => {
-    getAndRenderHistory();
+  fetchWeather(search).then((data) => {
+    if (data) {
+      getAndRenderHistory();
+    }
   });
   searchInput.value = '';
 };
 
-const handleSearchHistoryClick = (event: any) => {
-  if (event.target.matches('.history-btn')) {
-    const city = event.target.textContent;
-    fetchWeather(city).then(getAndRenderHistory);
+const handleSearchHistoryClick = (event: Event) => {
+  const target = event.target as HTMLElement;
+  if (target.matches('.history-btn')) {
+    const city = target.textContent;
+    if (city) {
+      fetchWeather(city).then((data) => {
+        if (data) {
+          getAndRenderHistory();
+        }
+      });
+    }
   }
 };
 
-const handleDeleteHistoryClick = (event: any) => {
+const handleDeleteHistoryClick = (event: Event) => {
   event.stopPropagation();
-  const cityID = JSON.parse(event.target.getAttribute('data-city')).id;
-  deleteCityFromHistory(cityID).then(getAndRenderHistory);
+  const target = event.target as HTMLElement;
+  const cityDataString = target.getAttribute('data-city');
+  
+  if (!cityDataString) {
+    console.error('No city data found');
+    return;
+  }
+  
+  try {
+    const cityData = JSON.parse(cityDataString);
+    if (cityData && cityData.id) {
+      deleteCityFromHistory(cityData.id).then(getAndRenderHistory);
+    } else {
+      console.error('Invalid city data:', cityData);
+    }
+  } catch (error) {
+    console.error('Error parsing city data:', error);
+  }
 };
 
 /*
@@ -282,10 +444,28 @@ Initial Render
 
 */
 
-const getAndRenderHistory = () =>
-  fetchSearchHistory().then(renderSearchHistory);
+const getAndRenderHistory = () => {
+  return fetchSearchHistory()
+    .then(renderSearchHistory)
+    .catch(error => {
+      console.error('Error in getAndRenderHistory:', error);
+    });
+};
 
-searchForm?.addEventListener('submit', handleSearchFormSubmit);
-searchHistoryContainer?.addEventListener('click', handleSearchHistoryClick);
+// Add event listeners with proper error handling
+if (searchForm) {
+  searchForm.addEventListener('submit', handleSearchFormSubmit);
+} else {
+  console.error('Search form element not found');
+}
 
-getAndRenderHistory();
+if (searchHistoryContainer) {
+  searchHistoryContainer.addEventListener('click', handleSearchHistoryClick);
+} else {
+  console.error('Search history container element not found');
+}
+
+// Initial load
+document.addEventListener('DOMContentLoaded', () => {
+  getAndRenderHistory();
+});
