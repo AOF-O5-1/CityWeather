@@ -48,10 +48,6 @@ interface ForecastDay {
   humidity: number;
 }
 
-interface WeatherData {
-  currentWeather: CurrentWeather;
-  forecast: ForecastDay[];
-}
 
 interface CityHistory {
   id: string;
